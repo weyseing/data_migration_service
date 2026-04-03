@@ -6,13 +6,16 @@ from fastapi.responses import HTMLResponse
 from backend.config import get_source_engine
 from backend.discovery import run_discovery
 from backend.discovery.graph import build_dependency_graph, export_dot, get_load_order
+from backend.mapping import run_mapping
 from backend.models.discovery import DiscoveryResult
+from backend.models.mapping import MappingResult
 
 app = FastAPI(title="Mini IronBook", version="0.1.0")
 
 FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 _discovery_cache: DiscoveryResult | None = None
+_mapping_cache: MappingResult | None = None
 
 
 @app.get("/health")
@@ -67,3 +70,29 @@ def api_graph():
         "load_order": get_load_order(graph),
         "dot": export_dot(graph),
     }
+
+
+# --- Mapping endpoints ---
+
+
+@app.post("/api/mapping/run")
+def api_run_mapping():
+    global _mapping_cache
+    if not _discovery_cache:
+        raise HTTPException(400, "Run discovery first")
+    _mapping_cache = run_mapping(_discovery_cache)
+    return _mapping_cache
+
+
+@app.get("/api/mapping/tables")
+def api_mapping_tables():
+    if not _mapping_cache:
+        raise HTTPException(404, "Run mapping first")
+    return _mapping_cache.table_mappings
+
+
+@app.get("/api/mapping/procedures")
+def api_mapping_procedures():
+    if not _mapping_cache:
+        raise HTTPException(404, "Run mapping first")
+    return _mapping_cache.procedure_mappings

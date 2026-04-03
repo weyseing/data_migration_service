@@ -1,0 +1,34 @@
+Step 1: Discovery Engine — COMPLETED
+
+Files created:
+  backend/config.py          — DB connection settings, engine helpers, schema extraction
+  backend/models/discovery.py — Pydantic models (ColumnInfo, TableInfo, ForeignKeyInfo, etc.)
+  backend/discovery/scanner.py    — SQLAlchemy inspect() to pull tables, columns, PKs, FKs, indexes
+  backend/discovery/sql_parser.py — Extract stored procedures, views, triggers from information_schema
+  backend/discovery/graph.py      — NetworkX dependency graph + topological load order
+  backend/discovery/__init__.py   — run_discovery() orchestrator
+  backend/main.py            — FastAPI endpoints (POST /api/discovery/run, GET tables/procedures/graph)
+  frontend/index.html        — Vue 3 dashboard (CDN, no build step)
+
+Files modified:
+  seed/init.sql              — Fixed procedure definer + migration user grants
+  docker-compose.yml         — Fixed pg healthcheck, removed Streamlit port
+  docker-entrypoint.sh       — Removed Streamlit, single uvicorn process
+  requirements.txt           — Added cryptography, removed streamlit/pandas/graphviz
+  Dockerfile                 — Removed EXPOSE 8501
+
+Files removed:
+  frontend/app.py            — Old Streamlit frontend (replaced by Vue)
+
+What it does:
+  - Connects to source MySQL, inspects all tables/columns/types/FKs/indexes
+  - Captures ENUM values (e.g. ENUM('pending','processing','shipped',...))
+  - Extracts stored procedures via SHOW CREATE PROCEDURE
+  - Builds FK dependency graph, outputs safe migration load order
+  - Exposes results via REST API
+  - Vue dashboard: stats, table overview, expandable details, SQL viewer, graph
+
+Next step: Step 2 — Mapping Engine
+  - SQLGlot: deterministic type mapping (MySQL types to PostgreSQL types)
+  - Claude API: complex logic mapping (stored procedures, business rules)
+  - Files to create: backend/mapping/type_mapper.py, backend/mapping/ai_mapper.py

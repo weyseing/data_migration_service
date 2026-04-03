@@ -244,6 +244,68 @@
           </div>
         </template>
 
+        <!-- Step 2: Mapping -->
+        <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid #f0f0f0;">
+          <div class="sh">Step 2</div>
+          <h2>Type Mapping</h2>
+          <p style="color: #999; font-size: 13px; margin-bottom: 16px;">Map MySQL types to PostgreSQL using SQLGlot + Claude AI for stored procedures.</p>
+          <button class="btn" style="background: #0f172a; color: #fff; margin-bottom: 20px;" @click="runMapping" :disabled="mappingLoading">
+            <span v-if="mappingLoading" class="spinner"></span>
+            {{ mappingLoading ? 'Mapping...' : 'Run Mapping' }}
+          </button>
+          <div v-if="mappingStatus" class="status" :class="mappingStatus.type">{{ mappingStatus.message }}</div>
+        </div>
+
+        <template v-if="mapping">
+          <!-- Type Mappings -->
+          <div v-for="tm in mapping.table_mappings" :key="tm.source_table" class="card">
+            <div class="exp" @click="toggle('map_' + tm.source_table)">
+              <span class="arr" :class="{ open: expanded['map_' + tm.source_table] }">&#9654;</span>
+              <span class="exp-name">{{ tm.source_table }}</span>
+              <span class="badge">{{ tm.column_mappings.length }} mappings</span>
+            </div>
+            <div v-if="expanded['map_' + tm.source_table]" style="margin-top: 12px;">
+              <table>
+                <thead><tr><th>Column</th><th>MySQL</th><th></th><th>PostgreSQL</th><th>Notes</th></tr></thead>
+                <tbody>
+                  <tr v-for="c in tm.column_mappings" :key="c.source_column">
+                    <td><strong>{{ c.source_column }}</strong></td>
+                    <td><code>{{ c.source_type }}</code></td>
+                    <td style="color: #ccc;">&rarr;</td>
+                    <td><code>{{ c.target_type }}</code></td>
+                    <td style="color: #999; font-size: 12px;">{{ c.notes }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Procedure Mappings -->
+          <template v-if="mapping.procedure_mappings.length">
+            <div class="sh" style="margin-top: 32px;">AI Conversion</div>
+            <h2>Procedure Mapping</h2>
+            <div v-for="pm in mapping.procedure_mappings" :key="pm.source_name" class="card">
+              <div class="exp" @click="toggle('pmap_' + pm.source_name)">
+                <span class="arr" :class="{ open: expanded['pmap_' + pm.source_name] }">&#9654;</span>
+                <span class="exp-name">{{ pm.source_name }}</span>
+                <span class="badge">{{ pm.explanation }}</span>
+              </div>
+              <div v-if="expanded['pmap_' + pm.source_name]" style="margin-top: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div>
+                    <div style="font-size: 11px; font-weight: 600; color: #999; margin-bottom: 6px;">MySQL (source)</div>
+                    <pre>{{ pm.source_body }}</pre>
+                  </div>
+                  <div>
+                    <div style="font-size: 11px; font-weight: 600; color: #999; margin-bottom: 6px;">PostgreSQL (target)</div>
+                    <pre>{{ pm.target_sql }}</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </template>
+
         <div class="sh" style="margin-top: 32px;">Dependencies</div>
         <h2>Migration Graph</h2>
         <div class="graph-box" data-dark>
@@ -269,6 +331,9 @@
         const discovery = ref(null)
         const graphData = ref(null)
         const expanded = reactive({})
+        const mapping = ref(null)
+        const mappingLoading = ref(false)
+        const mappingStatus = ref(null)
         const totalColumns = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + t.columns.length, 0) : 0)
         const totalRows = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + (t.row_count || 0), 0) : 0)
 
@@ -294,8 +359,19 @@
           } catch (e) { console.error('Graph render failed:', e) }
         }
 
+        async function runMapping() {
+          mappingLoading.value = true; mappingStatus.value = null
+          try {
+            const resp = await fetch('/api/mapping/run', { method: 'POST' })
+            if (!resp.ok) throw new Error(await resp.text())
+            mapping.value = await resp.json()
+            mappingStatus.value = { type: 'success', message: `Mapping complete — ${mapping.value.table_mappings.length} tables, ${mapping.value.procedure_mappings.length} procedures mapped.` }
+          } catch (e) { mappingStatus.value = { type: 'error', message: 'Mapping failed: ' + e.message } }
+          finally { mappingLoading.value = false }
+        }
+
         function toggle(key) { expanded[key] = !expanded[key] }
-        return { loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, toggle }
+        return { loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, toggle }
       }
     }).mount('#app')
   </script>
