@@ -91,7 +91,6 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
     ports:
       - "8000:8000"
-      - "8501:8501"
     volumes:
       - ./backend:/app/backend
       - ./frontend:/app/frontend

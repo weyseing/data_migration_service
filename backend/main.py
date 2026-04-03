@@ -1,4 +1,7 @@
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 
 from backend.config import get_source_engine
 from backend.discovery import run_discovery
@@ -7,12 +10,19 @@ from backend.models.discovery import DiscoveryResult
 
 app = FastAPI(title="Mini IronBook", version="0.1.0")
 
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
+
 _discovery_cache: DiscoveryResult | None = None
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return (FRONTEND_DIR / "index.html").read_text()
 
 
 @app.post("/api/discovery/run")

@@ -31,13 +31,6 @@ KafkaProducer(bootstrap_servers='redpanda:29092').close()
 done
 echo "Redpanda ready."
 
-# Start FastAPI backend
-echo "Starting FastAPI backend on :8000"
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 &
-
-# Start Streamlit frontend
-echo "Starting Streamlit dashboard on :8501"
-streamlit run frontend/app.py --server.port 8501 --server.address 0.0.0.0 &
-
-echo "=== Mini IronBook - All services running ==="
-wait
+# Start FastAPI backend (serves API + Vue frontend)
+echo "Starting FastAPI on :8000"
+exec uvicorn backend.main:app --host 0.0.0.0 --port 8000
