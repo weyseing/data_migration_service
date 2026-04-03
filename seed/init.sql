@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 -- Sample stored procedure
 DELIMITER //
-CREATE PROCEDURE calc_customer_totals()
+CREATE DEFINER='migration'@'%' PROCEDURE calc_customer_totals()
 BEGIN
     DECLARE done INT DEFAULT FALSE;
     DECLARE cid INT;
@@ -99,7 +99,8 @@ INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES
 (4, 5, 1, 129.99),
 (5, 1, 1, 2499.99);
 
--- Grant replication permissions for Debezium CDC
+-- Grant permissions for Debezium CDC and schema discovery
 GRANT REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'migration'@'%';
-GRANT SELECT ON source_db.* TO 'migration'@'%';
+GRANT ALL PRIVILEGES ON source_db.* TO 'migration'@'%';
+GRANT SELECT ON information_schema.* TO 'migration'@'%';
 FLUSH PRIVILEGES;
