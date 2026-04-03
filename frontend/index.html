@@ -371,6 +371,12 @@
         }
 
         function toggle(key) { expanded[key] = !expanded[key] }
+
+        // Auto-run if ?auto=1 (for screenshots)
+        if (new URLSearchParams(location.search).has('auto')) {
+          runDiscovery().then(() => runMapping())
+        }
+
         return { loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, toggle }
       }
     }).mount('#app')
