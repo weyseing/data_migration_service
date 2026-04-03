@@ -1,0 +1,111 @@
+version: "3.8"
+
+services:
+  # Source database
+  mysql:
+    image: mysql:8.0
+    container_name: source-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: source_db
+      MYSQL_USER: migration
+      MYSQL_PASSWORD: migration123
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./seed:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
+    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW --binlog-row-image=FULL
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Target database
+  postgres:
+    image: postgres:16
+    container_name: target-postgres
+    environment:
+      POSTGRES_DB: target_db
+      POSTGRES_USER: migration
+      POSTGRES_PASSWORD: migration123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-ARGS", "pg_isready", "-U", "migration"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redpanda (Kafka-compatible, no JVM)
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      - --advertise-kafka-addr=PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Debezium (CDC connector)
+  debezium:
+    image: debezium/connect:2.5
+    container_name: debezium
+    environment:
+      BOOTSTRAP_SERVERS: redpanda:29092
+      GROUP_ID: 1
+      CONFIG_STORAGE_TOPIC: debezium_configs
+      OFFSET_STORAGE_TOPIC: debezium_offsets
+      STATUS_STORAGE_TOPIC: debezium_statuses
+    ports:
+      - "8083:8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ironbook-backend
+    environment:
+      SOURCE_DB_URL: mysql+pymysql://migration:migration123@mysql:3306/source_db
+      TARGET_DB_URL: postgresql+psycopg2://migration:migration123@postgres:5432/target_db
+      KAFKA_BROKER: redpanda:29092
+      DEBEZIUM_URL: http://debezium:8083
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app/backend
+      - ./frontend:/app/frontend
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+      debezium:
+        condition: service_started
+
+volumes:
+  mysql_data:
+  pg_data:

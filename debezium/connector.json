@@ -1,0 +1,15 @@
+{
+  "name": "source-mysql-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "mysql",
+    "database.port": "3306",
+    "database.user": "migration",
+    "database.password": "migration123",
+    "database.server.id": "1",
+    "topic.prefix": "source",
+    "database.include.list": "source_db",
+    "schema.history.internal.kafka.bootstrap.servers": "redpanda:29092",
+    "schema.history.internal.kafka.topic": "schema-changes"
+  }
+}
