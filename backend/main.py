@@ -9,7 +9,9 @@ from backend.discovery.graph import build_dependency_graph, export_dot, get_load
 from backend.mapping import run_mapping
 from backend.models.discovery import DiscoveryResult
 from backend.models.mapping import MappingResult
+from backend.models.migration import MigrationState
 from backend.models.refactoring import RefactoringResult
+from backend.migration import run_migration
 from backend.refactoring import run_refactoring
 
 app = FastAPI(title="Mini IronBook", version="0.1.0")
@@ -19,6 +21,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 _discovery_cache: DiscoveryResult | None = None
 _mapping_cache: MappingResult | None = None
 _refactoring_cache: RefactoringResult | None = None
+_migration_cache: MigrationState | None = None
 
 
 @app.get("/health")
@@ -125,3 +128,22 @@ def api_refactoring_procedures():
     if not _refactoring_cache:
         raise HTTPException(404, "Run refactoring first")
     return _refactoring_cache.procedure_refactors
+
+
+# --- Migration endpoints ---
+
+
+@app.post("/api/migration/run")
+def api_run_migration():
+    global _migration_cache
+    if not _discovery_cache or not _refactoring_cache:
+        raise HTTPException(400, "Run discovery and refactoring first")
+    _migration_cache = run_migration(_discovery_cache, _refactoring_cache)
+    return _migration_cache
+
+
+@app.get("/api/migration/status")
+def api_migration_status():
+    if not _migration_cache:
+        raise HTTPException(404, "Run migration first")
+    return _migration_cache

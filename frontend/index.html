@@ -195,7 +195,7 @@
         <button class="tab-btn" :class="{ active: tab === 'refactoring' }" :disabled="!mapping" @click="switchTab('refactoring')">
           <span class="tab-step">3</span> Refactoring
         </button>
-        <button class="tab-btn" :disabled="true">
+        <button class="tab-btn" :class="{ active: tab === 'migration' }" :disabled="!refactoring" @click="switchTab('migration')">
           <span class="tab-step">4</span> Migration
         </button>
       </div>
@@ -454,6 +454,96 @@
         </template>
       </div>
     </template>
+
+    <!-- Tab: Migration -->
+    <template v-if="tab === 'migration'">
+      <div class="content">
+        <div v-if="!migration" class="empty">
+          <p>Execute the migration: apply schema, bulk load data, replay CDC events, and validate.</p>
+          <button class="btn btn-dark" @click="runMigration" :disabled="migrationLoading">
+            <span v-if="migrationLoading" class="spinner"></span>
+            {{ migrationLoading ? 'Migrating...' : 'Run Migration' }}
+          </button>
+        </div>
+
+        <template v-else>
+          <div class="rerun-row">
+            <div v-if="migrationStatus" class="status" :class="migrationStatus.type">{{ migrationStatus.message }}</div>
+            <button class="btn btn-dark btn-sm" @click="runMigration" :disabled="migrationLoading">
+              <span v-if="migrationLoading" class="spinner"></span> Re-run
+            </button>
+          </div>
+
+          <!-- Phase progress -->
+          <div class="sh">Pipeline</div>
+          <h2>Migration Phases</h2>
+          <div class="card">
+            <table>
+              <thead><tr><th>Phase</th><th>Status</th><th>Details</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Schema</strong></td>
+                  <td><span class="badge" :style="migration.schema_applied ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ migration.schema_applied ? 'Applied' : 'Failed' }}</span></td>
+                  <td style="color:#999;font-size:12px;">{{ migration.schema_errors.length ? migration.schema_errors.join('; ') : 'All tables and procedures created' }}</td>
+                </tr>
+                <tr>
+                  <td><strong>CDC Start</strong></td>
+                  <td><span class="badge" :style="migration.cdc_started ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ migration.cdc_started ? 'Running' : 'Failed' }}</span></td>
+                  <td style="color:#999;font-size:12px;">Debezium connector</td>
+                </tr>
+                <tr>
+                  <td><strong>Full Load</strong></td>
+                  <td><span class="badge" :style="migration.table_loads.every(t => t.success) ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ migration.table_loads.filter(t => t.success).length }}/{{ migration.table_loads.length }}</span></td>
+                  <td style="color:#999;font-size:12px;">{{ migration.table_loads.reduce((s, t) => s + t.rows_copied, 0) }} rows copied</td>
+                </tr>
+                <tr>
+                  <td><strong>CDC Replay</strong></td>
+                  <td><span class="badge" style="background:#f0f9ff;color:#0369a1">{{ migration.cdc_events_applied }} events</span></td>
+                  <td style="color:#999;font-size:12px;">UPSERT/DELETE applied</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Table load details -->
+          <div class="sh" style="margin-top: 32px;">Data Transfer</div>
+          <h2>Table Loads</h2>
+          <div class="card">
+            <table>
+              <thead><tr><th>Table</th><th>Rows</th><th>Status</th><th>Error</th></tr></thead>
+              <tbody>
+                <tr v-for="tl in migration.table_loads" :key="tl.table_name">
+                  <td><strong>{{ tl.table_name }}</strong></td>
+                  <td>{{ tl.rows_copied }}</td>
+                  <td><span class="badge" :style="tl.success ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ tl.success ? 'OK' : 'Failed' }}</span></td>
+                  <td style="color:#999;font-size:12px;">{{ tl.error }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Validation -->
+          <template v-if="migration.validations.length">
+            <div class="sh" style="margin-top: 32px;">Verification</div>
+            <h2>Data Validation</h2>
+            <div class="card">
+              <table>
+                <thead><tr><th>Table</th><th>Source</th><th>Target</th><th>Count</th><th>Checksum</th></tr></thead>
+                <tbody>
+                  <tr v-for="v in migration.validations" :key="v.table_name">
+                    <td><strong>{{ v.table_name }}</strong></td>
+                    <td>{{ v.source_count }}</td>
+                    <td>{{ v.target_count }}</td>
+                    <td><span class="badge" :style="v.counts_match ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ v.counts_match ? 'Match' : 'Mismatch' }}</span></td>
+                    <td><span class="badge" :style="v.checksums_match ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ v.checksums_match ? 'Match' : 'Mismatch' }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
+        </template>
+      </div>
+    </template>
   </div>
 
   <script>
@@ -472,6 +562,9 @@
         const refactoring = ref(null)
         const refactoringLoading = ref(false)
         const refactoringStatus = ref(null)
+        const migration = ref(null)
+        const migrationLoading = ref(false)
+        const migrationStatus = ref(null)
         const totalColumns = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + t.columns.length, 0) : 0)
         const totalRows = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + (t.row_count || 0), 0) : 0)
 
@@ -531,14 +624,31 @@
           finally { refactoringLoading.value = false }
         }
 
+        async function runMigration() {
+          migrationLoading.value = true; migrationStatus.value = null
+          try {
+            const resp = await fetch('/api/migration/run', { method: 'POST' })
+            if (!resp.ok) throw new Error(await resp.text())
+            migration.value = await resp.json()
+            const phase = migration.value.phase
+            if (phase === 'completed') {
+              const allMatch = migration.value.validations.every(v => v.counts_match && v.checksums_match)
+              migrationStatus.value = { type: 'success', message: `Migration complete — ${migration.value.table_loads.reduce((s, t) => s + t.rows_copied, 0)} rows transferred, ${migration.value.cdc_events_applied} CDC events applied.${allMatch ? ' All validations passed.' : ' Some validations failed.'}` }
+            } else {
+              migrationStatus.value = { type: 'error', message: `Migration stopped at phase: ${phase}. ${migration.value.error}` }
+            }
+          } catch (e) { migrationStatus.value = { type: 'error', message: 'Migration failed: ' + e.message } }
+          finally { migrationLoading.value = false }
+        }
+
         function toggle(key) { expanded[key] = !expanded[key] }
 
         // Auto-run if ?auto=1 (for screenshots)
         if (new URLSearchParams(location.search).has('auto')) {
-          runDiscovery().then(() => { switchTab('mapping'); return runMapping() }).then(() => { switchTab('refactoring'); return runRefactoring() })
+          runDiscovery().then(() => { switchTab('mapping'); return runMapping() }).then(() => { switchTab('refactoring'); return runRefactoring() }).then(() => { switchTab('migration'); return runMigration() })
         }
 
-        return { tab, switchTab, loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, refactoring, refactoringLoading, refactoringStatus, runRefactoring, toggle }
+        return { tab, switchTab, loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, refactoring, refactoringLoading, refactoringStatus, runRefactoring, migration, migrationLoading, migrationStatus, runMigration, toggle }
       }
     }).mount('#app')
   </script>
