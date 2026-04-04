@@ -155,6 +155,9 @@
     /* Empty state */
     .empty { text-align: center; padding: 64px 24px; color: #999; }
     .empty p { font-size: 14px; margin-bottom: 16px; }
+    .rerun-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+    .rerun-row .status { margin-bottom: 0; flex: 1; }
+    .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 6px; }
 
     .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -189,7 +192,7 @@
         <button class="tab-btn" :class="{ active: tab === 'mapping' }" :disabled="!discovery" @click="switchTab('mapping')">
           <span class="tab-step">2</span> Mapping
         </button>
-        <button class="tab-btn" :disabled="true">
+        <button class="tab-btn" :class="{ active: tab === 'refactoring' }" :disabled="!mapping" @click="switchTab('refactoring')">
           <span class="tab-step">3</span> Refactoring
         </button>
         <button class="tab-btn" :disabled="true">
@@ -233,7 +236,12 @@
         </div>
 
         <div class="content">
-          <div v-if="status" class="status" :class="status.type">{{ status.message }}</div>
+          <div class="rerun-row">
+            <div v-if="status" class="status" :class="status.type">{{ status.message }}</div>
+            <button class="btn btn-dark btn-sm" @click="runDiscovery" :disabled="loading">
+              <span v-if="loading" class="spinner"></span> Re-run
+            </button>
+          </div>
 
           <div class="sh">Schema</div>
           <h2>Tables</h2>
@@ -327,7 +335,12 @@
         </div>
 
         <template v-else>
-          <div v-if="mappingStatus" class="status" :class="mappingStatus.type">{{ mappingStatus.message }}</div>
+          <div class="rerun-row">
+            <div v-if="mappingStatus" class="status" :class="mappingStatus.type">{{ mappingStatus.message }}</div>
+            <button class="btn btn-dark btn-sm" @click="runMapping" :disabled="mappingLoading">
+              <span v-if="mappingLoading" class="spinner"></span> Re-run
+            </button>
+          </div>
 
           <div class="sh">Type Mappings</div>
           <h2>Table Column Types</h2>
@@ -379,6 +392,68 @@
         </template>
       </div>
     </template>
+
+    <!-- Tab: Refactoring -->
+    <template v-if="tab === 'refactoring'">
+      <div class="content">
+        <div v-if="!refactoring" class="empty">
+          <p>Generate PostgreSQL DDL and refactor stored procedures using AI.</p>
+          <button class="btn btn-dark" @click="runRefactoring" :disabled="refactoringLoading">
+            <span v-if="refactoringLoading" class="spinner"></span>
+            {{ refactoringLoading ? 'Refactoring...' : 'Run Refactoring' }}
+          </button>
+        </div>
+
+        <template v-else>
+          <div class="rerun-row">
+            <div v-if="refactoringStatus" class="status" :class="refactoringStatus.type">{{ refactoringStatus.message }}</div>
+            <button class="btn btn-dark btn-sm" @click="runRefactoring" :disabled="refactoringLoading">
+              <span v-if="refactoringLoading" class="spinner"></span> Re-run
+            </button>
+          </div>
+
+          <div class="sh">Generated DDL</div>
+          <h2>CREATE TABLE Statements</h2>
+          <div v-for="td in refactoring.table_ddls" :key="td.table_name" class="card">
+            <div class="exp" @click="toggle('ddl_' + td.table_name)">
+              <span class="arr" :class="{ open: expanded['ddl_' + td.table_name] }">&#9654;</span>
+              <span class="exp-name">{{ td.table_name }}</span>
+              <span class="badge" :style="td.valid ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ td.valid ? 'Valid' : 'Invalid' }}</span>
+            </div>
+            <div v-if="expanded['ddl_' + td.table_name]" style="margin-top: 12px;">
+              <pre>{{ td.ddl }}</pre>
+              <div v-if="td.error" class="status error" style="margin-top: 8px;">{{ td.error }}</div>
+            </div>
+          </div>
+
+          <template v-if="refactoring.procedure_refactors.length">
+            <div class="sh" style="margin-top: 32px;">AI Refactored</div>
+            <h2>Stored Procedures</h2>
+            <div v-for="pr in refactoring.procedure_refactors" :key="pr.source_name" class="card">
+              <div class="exp" @click="toggle('ref_' + pr.source_name)">
+                <span class="arr" :class="{ open: expanded['ref_' + pr.source_name] }">&#9654;</span>
+                <span class="exp-name">{{ pr.source_name }}</span>
+                <span class="badge" :style="pr.valid ? 'background:#f0fdf4;color:#15803d' : 'background:#fef2f2;color:#b91c1c'">{{ pr.valid ? 'Valid' : 'Invalid' }}</span>
+                <span class="badge">{{ pr.explanation }}</span>
+              </div>
+              <div v-if="expanded['ref_' + pr.source_name]" style="margin-top: 12px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                  <div>
+                    <div style="font-size: 11px; font-weight: 600; color: #999; margin-bottom: 6px;">MySQL (original)</div>
+                    <pre>{{ pr.source_body }}</pre>
+                  </div>
+                  <div>
+                    <div style="font-size: 11px; font-weight: 600; color: #999; margin-bottom: 6px;">PostgreSQL (refactored)</div>
+                    <pre>{{ pr.target_sql }}</pre>
+                  </div>
+                </div>
+                <div v-if="pr.error" class="status error" style="margin-top: 8px;">{{ pr.error }}</div>
+              </div>
+            </div>
+          </template>
+        </template>
+      </div>
+    </template>
   </div>
 
   <script>
@@ -394,6 +469,9 @@
         const mapping = ref(null)
         const mappingLoading = ref(false)
         const mappingStatus = ref(null)
+        const refactoring = ref(null)
+        const refactoringLoading = ref(false)
+        const refactoringStatus = ref(null)
         const totalColumns = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + t.columns.length, 0) : 0)
         const totalRows = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + (t.row_count || 0), 0) : 0)
 
@@ -438,14 +516,29 @@
           finally { mappingLoading.value = false }
         }
 
+        async function runRefactoring() {
+          refactoringLoading.value = true; refactoringStatus.value = null
+          try {
+            const resp = await fetch('/api/refactoring/run', { method: 'POST' })
+            if (!resp.ok) throw new Error(await resp.text())
+            refactoring.value = await resp.json()
+            const validDdl = refactoring.value.table_ddls.filter(t => t.valid).length
+            const totalDdl = refactoring.value.table_ddls.length
+            const validProc = refactoring.value.procedure_refactors.filter(p => p.valid).length
+            const totalProc = refactoring.value.procedure_refactors.length
+            refactoringStatus.value = { type: 'success', message: `Refactoring complete — DDL: ${validDdl}/${totalDdl} valid, Procedures: ${validProc}/${totalProc} valid.` }
+          } catch (e) { refactoringStatus.value = { type: 'error', message: 'Refactoring failed: ' + e.message } }
+          finally { refactoringLoading.value = false }
+        }
+
         function toggle(key) { expanded[key] = !expanded[key] }
 
         // Auto-run if ?auto=1 (for screenshots)
         if (new URLSearchParams(location.search).has('auto')) {
-          runDiscovery().then(() => { switchTab('mapping'); return runMapping() })
+          runDiscovery().then(() => { switchTab('mapping'); return runMapping() }).then(() => { switchTab('refactoring'); return runRefactoring() })
         }
 
-        return { tab, switchTab, loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, toggle }
+        return { tab, switchTab, loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, refactoring, refactoringLoading, refactoringStatus, runRefactoring, toggle }
       }
     }).mount('#app')
   </script>

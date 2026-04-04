@@ -9,6 +9,8 @@ from backend.discovery.graph import build_dependency_graph, export_dot, get_load
 from backend.mapping import run_mapping
 from backend.models.discovery import DiscoveryResult
 from backend.models.mapping import MappingResult
+from backend.models.refactoring import RefactoringResult
+from backend.refactoring import run_refactoring
 
 app = FastAPI(title="Mini IronBook", version="0.1.0")
 
@@ -16,6 +18,7 @@ FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 _discovery_cache: DiscoveryResult | None = None
 _mapping_cache: MappingResult | None = None
+_refactoring_cache: RefactoringResult | None = None
 
 
 @app.get("/health")
@@ -96,3 +99,29 @@ def api_mapping_procedures():
     if not _mapping_cache:
         raise HTTPException(404, "Run mapping first")
     return _mapping_cache.procedure_mappings
+
+
+# --- Refactoring endpoints ---
+
+
+@app.post("/api/refactoring/run")
+def api_run_refactoring():
+    global _refactoring_cache
+    if not _discovery_cache or not _mapping_cache:
+        raise HTTPException(400, "Run discovery and mapping first")
+    _refactoring_cache = run_refactoring(_discovery_cache, _mapping_cache)
+    return _refactoring_cache
+
+
+@app.get("/api/refactoring/ddl")
+def api_refactoring_ddl():
+    if not _refactoring_cache:
+        raise HTTPException(404, "Run refactoring first")
+    return _refactoring_cache.table_ddls
+
+
+@app.get("/api/refactoring/procedures")
+def api_refactoring_procedures():
+    if not _refactoring_cache:
+        raise HTTPException(404, "Run refactoring first")
+    return _refactoring_cache.procedure_refactors
