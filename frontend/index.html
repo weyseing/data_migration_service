@@ -39,23 +39,36 @@
     /* Hero */
     .hero {
       background: #0f172a; color: #fff;
-      padding: 72px 24px 64px; text-align: center;
+      padding: 72px 24px 48px; text-align: center;
     }
     .hero h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
     .hero p { color: rgba(255,255,255,0.5); font-size: 15px; margin-bottom: 28px; }
 
-    /* Button */
-    .btn {
-      background: #fff; color: #0f172a; border: none;
-      padding: 10px 24px; border-radius: 8px;
+    /* Tabs */
+    .tabs-bar {
+      background: #0f172a; padding: 0 24px 0;
+    }
+    .tabs-row {
+      max-width: 960px; margin: 0 auto;
+      display: flex; gap: 4px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2px solid transparent;
+      color: rgba(255,255,255,0.4); padding: 12px 20px;
       font-family: inherit; font-size: 13px; font-weight: 600;
       cursor: pointer; transition: all 0.2s;
     }
-    .btn:hover { background: #f1f5f9; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .tab-btn:hover { color: rgba(255,255,255,0.7); }
+    .tab-btn.active { color: #fff; border-bottom-color: #fff; }
+    .tab-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .tab-step {
+      font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.25);
+      margin-right: 6px;
+    }
+    .tab-btn.active .tab-step { color: rgba(255,255,255,0.5); }
 
     /* Stats */
-    .stats-bar { background: #0f172a; padding: 0 24px 48px; }
+    .stats-bar { background: #0f172a; padding: 24px 24px 48px; }
     .stats-row {
       max-width: 960px; margin: 0 auto;
       display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
@@ -66,6 +79,18 @@
     }
     .stat-val { font-size: 28px; font-weight: 700; color: #fff; }
     .stat-lbl { font-size: 11px; color: rgba(255,255,255,0.35); margin-top: 2px; }
+
+    /* Button */
+    .btn {
+      background: #fff; color: #0f172a; border: none;
+      padding: 10px 24px; border-radius: 8px;
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .btn:hover { background: #f1f5f9; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-dark { background: #0f172a; color: #fff; }
+    .btn-dark:hover { background: #1e293b; }
 
     /* Content */
     .content { max-width: 960px; margin: 0 auto; padding: 32px 24px 48px; }
@@ -78,7 +103,7 @@
     .card {
       background: #fff; border: 1px solid #f0f0f0; border-radius: 12px;
       padding: 16px; margin-bottom: 8px;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s; overflow-x: auto;
     }
     .card:hover { border-color: #e0e0e0; }
 
@@ -127,6 +152,10 @@
     .status.success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
     .status.error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
 
+    /* Empty state */
+    .empty { text-align: center; padding: 64px 24px; color: #999; }
+    .empty p { font-size: 14px; margin-bottom: 16px; }
+
     .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.6s linear infinite; margin-right: 6px; vertical-align: middle; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -147,117 +176,161 @@
 
   <div id="app">
     <div class="hero" data-dark>
-      <h1>Schema Discovery</h1>
-      <p>Scan your source database, map dependencies, and prepare for migration.</p>
-      <button class="btn" @click="runDiscovery" :disabled="loading">
-        <span v-if="loading" class="spinner"></span>
-        {{ loading ? 'Scanning...' : 'Run Discovery' }}
-      </button>
+      <h1>Data Migration</h1>
+      <p>AI-powered database migration from MySQL to PostgreSQL.</p>
     </div>
 
-    <div v-if="discovery" class="stats-bar" data-dark>
-      <div class="stats-row">
-        <div class="stat">
-          <div class="stat-val">{{ discovery.tables.length }}</div>
-          <div class="stat-lbl">Tables</div>
-        </div>
-        <div class="stat">
-          <div class="stat-val">{{ totalColumns }}</div>
-          <div class="stat-lbl">Columns</div>
-        </div>
-        <div class="stat">
-          <div class="stat-val">{{ discovery.stored_procedures.length }}</div>
-          <div class="stat-lbl">Procedures</div>
-        </div>
-        <div class="stat">
-          <div class="stat-val">{{ totalRows }}</div>
-          <div class="stat-lbl">Rows</div>
-        </div>
+    <!-- Tabs -->
+    <div class="tabs-bar" data-dark>
+      <div class="tabs-row">
+        <button class="tab-btn" :class="{ active: tab === 'discovery' }" @click="switchTab('discovery')">
+          <span class="tab-step">1</span> Discovery
+        </button>
+        <button class="tab-btn" :class="{ active: tab === 'mapping' }" :disabled="!discovery" @click="switchTab('mapping')">
+          <span class="tab-step">2</span> Mapping
+        </button>
+        <button class="tab-btn" :disabled="true">
+          <span class="tab-step">3</span> Refactoring
+        </button>
+        <button class="tab-btn" :disabled="true">
+          <span class="tab-step">4</span> Migration
+        </button>
       </div>
     </div>
 
-    <div class="content">
-      <div v-if="status" class="status" :class="status.type">{{ status.message }}</div>
+    <!-- Tab: Discovery -->
+    <template v-if="tab === 'discovery'">
+      <div v-if="!discovery" class="content">
+        <div class="empty">
+          <p>Run discovery to scan your source database.</p>
+          <button class="btn btn-dark" @click="runDiscovery" :disabled="loading">
+            <span v-if="loading" class="spinner"></span>
+            {{ loading ? 'Scanning...' : 'Run Discovery' }}
+          </button>
+        </div>
+      </div>
 
-      <template v-if="discovery">
-        <div class="sh">Schema</div>
-        <h2>Tables</h2>
-        <div class="card">
-          <table>
-            <thead>
-              <tr><th>Table</th><th>Columns</th><th>Primary Key</th><th>FKs</th><th>Indexes</th><th>Rows</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="t in discovery.tables" :key="t.name">
-                <td><strong>{{ t.name }}</strong></td>
-                <td>{{ t.columns.length }}</td>
-                <td><code>{{ t.primary_key.join(', ') }}</code></td>
-                <td>{{ t.foreign_keys.length }}</td>
-                <td>{{ t.indexes.length }}</td>
-                <td>{{ t.row_count }}</td>
-              </tr>
-            </tbody>
-          </table>
+      <template v-else>
+        <div class="stats-bar" data-dark>
+          <div class="stats-row">
+            <div class="stat">
+              <div class="stat-val">{{ discovery.tables.length }}</div>
+              <div class="stat-lbl">Tables</div>
+            </div>
+            <div class="stat">
+              <div class="stat-val">{{ totalColumns }}</div>
+              <div class="stat-lbl">Columns</div>
+            </div>
+            <div class="stat">
+              <div class="stat-val">{{ discovery.stored_procedures.length }}</div>
+              <div class="stat-lbl">Procedures</div>
+            </div>
+            <div class="stat">
+              <div class="stat-val">{{ totalRows }}</div>
+              <div class="stat-lbl">Rows</div>
+            </div>
+          </div>
         </div>
 
-        <div class="sh" style="margin-top: 32px;">Inspection</div>
-        <h2>Column Details</h2>
-        <div v-for="t in discovery.tables" :key="t.name" class="card">
-          <div class="exp" @click="toggle(t.name)">
-            <span class="arr" :class="{ open: expanded[t.name] }">&#9654;</span>
-            <span class="exp-name">{{ t.name }}</span>
-            <span class="badge">{{ t.columns.length }} cols</span>
-            <span class="badge">{{ t.row_count }} rows</span>
-          </div>
-          <div v-if="expanded[t.name]" style="margin-top: 12px;">
+        <div class="content">
+          <div v-if="status" class="status" :class="status.type">{{ status.message }}</div>
+
+          <div class="sh">Schema</div>
+          <h2>Tables</h2>
+          <div class="card">
             <table>
-              <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>PK</th><th>Default</th></tr></thead>
+              <thead>
+                <tr><th>Table</th><th>Columns</th><th>Primary Key</th><th>FKs</th><th>Indexes</th><th>Rows</th></tr>
+              </thead>
               <tbody>
-                <tr v-for="c in t.columns" :key="c.name">
-                  <td><strong>{{ c.name }}</strong></td>
-                  <td><code>{{ c.data_type }}</code></td>
-                  <td>{{ c.nullable ? 'Yes' : 'No' }}</td>
-                  <td>{{ c.is_primary_key ? 'Yes' : '' }}</td>
-                  <td>{{ c.default || '' }}</td>
+                <tr v-for="t in discovery.tables" :key="t.name">
+                  <td><strong>{{ t.name }}</strong></td>
+                  <td>{{ t.columns.length }}</td>
+                  <td><code>{{ t.primary_key.join(', ') }}</code></td>
+                  <td>{{ t.foreign_keys.length }}</td>
+                  <td>{{ t.indexes.length }}</td>
+                  <td>{{ t.row_count }}</td>
                 </tr>
               </tbody>
             </table>
-            <ul v-if="t.foreign_keys.length" class="fk-list">
-              <li v-for="fk in t.foreign_keys" :key="fk.name">
-                <code>{{ fk.constrained_columns.join(', ') }}</code>
-                &rarr; <code>{{ fk.referred_table }}.{{ fk.referred_columns.join(', ') }}</code>
-              </li>
-            </ul>
+          </div>
+
+          <div class="sh" style="margin-top: 32px;">Inspection</div>
+          <h2>Column Details</h2>
+          <div v-for="t in discovery.tables" :key="t.name" class="card">
+            <div class="exp" @click="toggle(t.name)">
+              <span class="arr" :class="{ open: expanded[t.name] }">&#9654;</span>
+              <span class="exp-name">{{ t.name }}</span>
+              <span class="badge">{{ t.columns.length }} cols</span>
+              <span class="badge">{{ t.row_count }} rows</span>
+            </div>
+            <div v-if="expanded[t.name]" style="margin-top: 12px;">
+              <table>
+                <thead><tr><th>Column</th><th>Type</th><th>Nullable</th><th>PK</th><th>Default</th></tr></thead>
+                <tbody>
+                  <tr v-for="c in t.columns" :key="c.name">
+                    <td><strong>{{ c.name }}</strong></td>
+                    <td><code>{{ c.data_type }}</code></td>
+                    <td>{{ c.nullable ? 'Yes' : 'No' }}</td>
+                    <td>{{ c.is_primary_key ? 'Yes' : '' }}</td>
+                    <td>{{ c.default || '' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <ul v-if="t.foreign_keys.length" class="fk-list">
+                <li v-for="fk in t.foreign_keys" :key="fk.name">
+                  <code>{{ fk.constrained_columns.join(', ') }}</code>
+                  &rarr; <code>{{ fk.referred_table }}.{{ fk.referred_columns.join(', ') }}</code>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <template v-if="discovery.stored_procedures.length">
+            <div class="sh" style="margin-top: 32px;">Logic</div>
+            <h2>Stored Procedures</h2>
+            <div v-for="proc in discovery.stored_procedures" :key="proc.name" class="card">
+              <div class="exp" @click="toggle('proc_' + proc.name)">
+                <span class="arr" :class="{ open: expanded['proc_' + proc.name] }">&#9654;</span>
+                <span class="exp-name">{{ proc.name }}</span>
+                <span class="badge">{{ proc.db }}</span>
+              </div>
+              <pre v-if="expanded['proc_' + proc.name]" style="margin-top: 12px;">{{ proc.body }}</pre>
+            </div>
+          </template>
+
+          <div class="sh" style="margin-top: 32px;">Dependencies</div>
+          <h2>Migration Graph</h2>
+          <div class="graph-box" data-dark>
+            <div id="graph-output"></div>
+            <div v-if="graphData" class="load-order">
+              <strong>Load order:</strong>
+              <template v-for="(table, i) in graphData.load_order" :key="table">
+                <span class="lo-chip">{{ table }}</span>
+                <span v-if="i < graphData.load_order.length - 1" class="lo-arrow">&rarr;</span>
+              </template>
+            </div>
           </div>
         </div>
+      </template>
+    </template>
 
-        <template v-if="discovery.stored_procedures.length">
-          <div class="sh" style="margin-top: 32px;">Logic</div>
-          <h2>Stored Procedures</h2>
-          <div v-for="proc in discovery.stored_procedures" :key="proc.name" class="card">
-            <div class="exp" @click="toggle('proc_' + proc.name)">
-              <span class="arr" :class="{ open: expanded['proc_' + proc.name] }">&#9654;</span>
-              <span class="exp-name">{{ proc.name }}</span>
-              <span class="badge">{{ proc.db }}</span>
-            </div>
-            <pre v-if="expanded['proc_' + proc.name]" style="margin-top: 12px;">{{ proc.body }}</pre>
-          </div>
-        </template>
-
-        <!-- Step 2: Mapping -->
-        <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid #f0f0f0;">
-          <div class="sh">Step 2</div>
-          <h2>Type Mapping</h2>
-          <p style="color: #999; font-size: 13px; margin-bottom: 16px;">Map MySQL types to PostgreSQL using SQLGlot + Claude AI for stored procedures.</p>
-          <button class="btn" style="background: #0f172a; color: #fff; margin-bottom: 20px;" @click="runMapping" :disabled="mappingLoading">
+    <!-- Tab: Mapping -->
+    <template v-if="tab === 'mapping'">
+      <div class="content">
+        <div v-if="!mapping" class="empty">
+          <p>Map MySQL types to PostgreSQL using SQLGlot + Claude AI for stored procedures.</p>
+          <button class="btn btn-dark" @click="runMapping" :disabled="mappingLoading">
             <span v-if="mappingLoading" class="spinner"></span>
             {{ mappingLoading ? 'Mapping...' : 'Run Mapping' }}
           </button>
-          <div v-if="mappingStatus" class="status" :class="mappingStatus.type">{{ mappingStatus.message }}</div>
         </div>
 
-        <template v-if="mapping">
-          <!-- Type Mappings -->
+        <template v-else>
+          <div v-if="mappingStatus" class="status" :class="mappingStatus.type">{{ mappingStatus.message }}</div>
+
+          <div class="sh">Type Mappings</div>
+          <h2>Table Column Types</h2>
           <div v-for="tm in mapping.table_mappings" :key="tm.source_table" class="card">
             <div class="exp" @click="toggle('map_' + tm.source_table)">
               <span class="arr" :class="{ open: expanded['map_' + tm.source_table] }">&#9654;</span>
@@ -280,7 +353,6 @@
             </div>
           </div>
 
-          <!-- Procedure Mappings -->
           <template v-if="mapping.procedure_mappings.length">
             <div class="sh" style="margin-top: 32px;">AI Conversion</div>
             <h2>Procedure Mapping</h2>
@@ -305,27 +377,15 @@
             </div>
           </template>
         </template>
-
-        <div class="sh" style="margin-top: 32px;">Dependencies</div>
-        <h2>Migration Graph</h2>
-        <div class="graph-box" data-dark>
-          <div id="graph-output"></div>
-          <div v-if="graphData" class="load-order">
-            <strong>Load order:</strong>
-            <template v-for="(table, i) in graphData.load_order" :key="table">
-              <span class="lo-chip">{{ table }}</span>
-              <span v-if="i < graphData.load_order.length - 1" class="lo-arrow">&rarr;</span>
-            </template>
-          </div>
-        </div>
-      </template>
-    </div>
+      </div>
+    </template>
   </div>
 
   <script>
     const { createApp, ref, reactive, computed, nextTick } = Vue
     createApp({
       setup() {
+        const tab = ref('discovery')
         const loading = ref(false)
         const status = ref(null)
         const discovery = ref(null)
@@ -336,6 +396,13 @@
         const mappingStatus = ref(null)
         const totalColumns = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + t.columns.length, 0) : 0)
         const totalRows = computed(() => discovery.value ? discovery.value.tables.reduce((s, t) => s + (t.row_count || 0), 0) : 0)
+
+        function switchTab(t) {
+          tab.value = t
+          if (t === 'discovery' && graphData.value) {
+            nextTick(() => renderGraph(graphData.value.dot))
+          }
+        }
 
         async function runDiscovery() {
           loading.value = true; status.value = null
@@ -355,6 +422,7 @@
             const viz = await Viz.instance()
             const svg = viz.renderSVGElement(dot)
             const el = document.getElementById('graph-output')
+            if (!el) return
             el.innerHTML = ''; el.appendChild(svg)
           } catch (e) { console.error('Graph render failed:', e) }
         }
@@ -374,10 +442,10 @@
 
         // Auto-run if ?auto=1 (for screenshots)
         if (new URLSearchParams(location.search).has('auto')) {
-          runDiscovery().then(() => runMapping())
+          runDiscovery().then(() => { switchTab('mapping'); return runMapping() })
         }
 
-        return { loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, toggle }
+        return { tab, switchTab, loading, status, discovery, graphData, expanded, totalColumns, totalRows, runDiscovery, mapping, mappingLoading, mappingStatus, runMapping, toggle }
       }
     }).mount('#app')
   </script>
